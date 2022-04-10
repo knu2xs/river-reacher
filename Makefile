@@ -37,28 +37,6 @@ env_remove:
 jupyter:
 	conda run -p ./env jupyter lab
 
-## If working in an EC2 environment, set everything up - BETA FEATURE
-ec2:
-
-	# get install and configure miniconda
-	wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
-	~/miniconda.sh -b -p $(HOME)/miniconda
-	~/miniconda/bin/conda init
-	sed -i '1 i\export PATH=/home/ubuntu/miniconda/bin:$PATH' ~/.bashrc
-
-	# create and activate the project conda environment
-	~/miniconda/bin/conda env create -f ./environment.yml
-	~/miniconda/bin/conda activate $(ENV_NAME)
-
-	# install the local package
-	python -m pip install -e .
-
-	# configure jupyter for remote access with password "jovyan"
-	jupyter notebook --generate-config
-	sed -i '1 i\c.NotebookApp.port = 8888' ~/.jupyter/jupyter_notebook_config.py
-	sed -i '1 i\c.NotebookApp.password = u"sha1:b37cb398255d:3f676cfe9b00e0c485385b435584ae5518bd14a4"' ~/.jupyter/jupyter_notebook_config.py
-	sed -i '1 i\c.NotebookApp.ip = "0.0.0.0"' ~/.jupyter/jupyter_notebook_config.py
-
 ## create a new kernel
 create_kernel:
 	conda run -p ./env python -m ipykernel install --user --name $(ENV_NAME) --display-name "$(PROJECT_NAME)"

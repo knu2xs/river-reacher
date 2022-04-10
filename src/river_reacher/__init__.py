@@ -4,7 +4,7 @@ __author__ = 'Joel McCune (https://github.com/knu2xs)'
 __license__ = 'Apache 2.0'
 __copyright__ = 'Copyright 2021 by Joel McCune (https://github.com/knu2xs)'
 
-__all__ = ['example_function', 'ExampleObject']
+__all__ = ['Reach']
 
 # add specific imports below if you want to organize your code into modules, which is mostly what I do
 ## from . import utils
@@ -13,6 +13,7 @@ from typing import Union
 from pathlib import Path
 
 import pandas as pd
+from .main import Reach
 
 
 def example_function(in_path: Union[str, Path]) -> pd.DataFrame:
