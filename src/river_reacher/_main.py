@@ -1,11 +1,15 @@
+from datetime import datetime
 from functools import lru_cache
 import json
 from pathlib import Path
+import re
 from typing import Iterable, List, Optional, Union
 from warnings import warn
 
 from arcgis.geometry import Geometry, Polyline
 from requests import get
+
+from ._utils import html_to_markdown, get_if_match_length
 
 
 class Reach(object):
@@ -106,7 +110,6 @@ class Reach(object):
 
         return aw_json
 
-
     def get_aw_property(self, key_and_index_list=List[Union[str, int]]) -> Union[str, dict]:
         """
         Retrieve deep nested properties from within the American Whitewater JSON.
@@ -129,19 +132,134 @@ class Reach(object):
 
         # walk through the list to get the value needed
         for key_idx in key_and_index_list:
-            ret_val = ret_val[key_idx]
+
+            # check to ensure a key exists and if it does, pull out the value
+            if isinstance(key_idx, str):
+                if key_idx not in ret_val.keys():
+                    ret_val = None
+
+            # if an index, ensure the list has length
+            elif isinstance(key_idx, int):
+                if len(ret_val[key_idx]) == 0:
+                    ret_val = None
+
+            # pull out the value if not none
+            if ret_val is not None:
+                ret_val = ret_val[key_idx]
+
+            # but if it is none, break out
+            else:
+                break
+
+        # if a string, do a little cleanup of leading and trailing spaces
+        if isinstance(ret_val, str):
+            ret_val = ret_val.strip()
 
         return ret_val
 
     @property
+    @lru_cache
     def geometry(self) -> Polyline:
         """
         Line geometry of the reach.
         """
         # extract the coordinates from the AW JSON
-        coord_list = self.get_aw_property(['CContainerViewJSON_view', 'CRiverMainGadgetJSON_main', 'info', 'geom', 'coordinates'])
+        coord_list = self.get_aw_property(['CContainerViewJSON_view', 'CRiverMainGadgetJSON_main', 'info', 'geom',
+                                           'coordinates'])
 
         # convert the coordinates to Esri JSON
         geom = Polyline({"paths" : [coord_list],"spatialReference" : {"wkid" : 4326}})
 
         return geom
+
+    @property
+    @lru_cache
+    def description(self) -> str:
+        """Reach description in Markdown."""
+        # pluck the description out of the markdown
+        raw_desc = self.get_aw_property(['CContainerViewJSON_view', 'CRiverMainGadgetJSON_main', 'info',
+                                         'description'])
+
+        # convert the html to markdown
+        md_desc = html_to_markdown(raw_desc)
+
+        return md_desc
+
+    @property
+    @lru_cache
+    def abstract(self) -> str:
+        """Reach abstract."""
+        # try to pull out of AW JSON
+        abstract = self.get_aw_property(['CContainerViewJSON_view', 'CRiverMainGadgetJSON_main', 'info',
+                                         'abstract'])
+
+        # if one is not provided, create one from the first 500 characters of the description
+        if abstract is None:
+
+            # remove all line returns, html tags, trim to 500 characters, and trim to last space to ensure full word
+            abstract = self.description
+            abstract = abstract.replace('\\', '').replace('/n', '')[:500]
+            abstract = abstract[:abstract.rfind(' ')]
+            abstract = abstract + '...'
+
+        return abstract
+
+    @property
+    @lru_cache
+    def difficulty(self) -> str:
+        """Full string representation of difficulty."""
+        diff = self.get_aw_property(['CContainerViewJSON_view', 'CRiverMainGadgetJSON_main', 'info',
+                                     'class'])
+        return diff
+
+    @property
+    @lru_cache
+    def _difficulty_match(self) -> re.Match:
+        match = re.match(
+            '^([I|IV|V|VI|5\.\d]{1,3}(?=-))?-?([I|IV|V|VI|5\.\d]{1,3}[+|-]?)\(?([I|IV|V|VI|5\.\d]{0,3}[+|-]?)',
+            self.difficulty
+        )
+        return match
+
+    @property
+    @lru_cache
+    def difficulty_minimum(self) -> str:
+        return get_if_match_length(self._difficulty_match.group(1))
+
+    @property
+    @lru_cache
+    def difficulty_maximum(self) -> str:
+        return get_if_match_length(self._difficulty_match.group(2))
+
+    @property
+    @lru_cache
+    def difficulty_outlier(self) -> str:
+        return get_if_match_length(self._difficulty_match.group(3))
+
+    @property
+    @lru_cache
+    def aw_update_timestamp(self):
+        dt_str = self.get_aw_property(['CContainerViewJSON_view', 'CRiverMainGadgetJSON_main', 'info', 'edited'])
+        dt = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+        return dt
+
+    @property
+    @lru_cache()
+    def difficulty_filter(self):
+        lookup_dict = {
+            'I':    1.0,
+            'I+':   1.1,
+            'II-':  1.2,
+            'II':   2.0,
+            'II+':  2.1,
+            'III-': 2.2,
+            'III':  3.0,
+            'III+': 3.1,
+            'IV-':  3.2,
+            'IV':   4.0,
+            'IV+':  4.1,
+            'V-':   4.3,
+            'V':    5.0,
+            'V+':   5.1
+        }
+        return lookup_dict[self.difficulty_maximum]

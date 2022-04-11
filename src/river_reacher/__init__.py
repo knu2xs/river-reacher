@@ -13,7 +13,7 @@ from typing import Union
 from pathlib import Path
 
 import pandas as pd
-from .main import Reach
+from ._main import Reach
 
 
 def example_function(in_path: Union[str, Path]) -> pd.DataFrame:

@@ -25,6 +25,7 @@ dependencies:
   - swifter
   - pip:
     - bump2version
+    - html2text
     - ipykernel
     - nbsphinx
     - sphinx
